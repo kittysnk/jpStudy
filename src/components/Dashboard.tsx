@@ -124,19 +124,19 @@ export default function Dashboard({
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-slate-400">유튜브 URL</label>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2.5">
               <input
                 type="text"
                 value={youtubeUrl}
                 onChange={(e) => setYoutubeUrl(e.target.value)}
                 placeholder="https://www.youtube.com/watch?v=..."
                 disabled={isLoading}
-                className="flex-1 bg-slate-950/60 border border-slate-800 focus:border-violet-500/50 outline-none rounded-xl px-4 py-2.5 text-sm text-slate-200 transition"
+                className="w-full sm:flex-1 bg-slate-950/60 border border-slate-800 focus:border-violet-500/50 outline-none rounded-xl px-4 py-2.5 text-sm text-slate-200 transition"
               />
               <button
                 type="submit"
                 disabled={isLoading || !youtubeUrl}
-                className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:opacity-95 active:scale-95 disabled:opacity-50 disabled:active:scale-100 text-white rounded-xl px-5 py-2.5 text-sm font-semibold transition flex items-center gap-1.5 shrink-0 shadow-lg shadow-violet-900/20"
+                className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:opacity-95 active:scale-95 disabled:opacity-50 disabled:active:scale-100 text-white rounded-xl px-5 py-2.5 text-sm font-semibold transition flex items-center justify-center gap-1.5 w-full sm:w-auto sm:shrink-0 shadow-lg shadow-violet-900/20"
               >
                 {isLoading ? (
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
