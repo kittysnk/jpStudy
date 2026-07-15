@@ -7,12 +7,16 @@ import Dashboard from "./components/Dashboard";
 import StudyRoom from "./components/StudyRoom";
 import Vocabulary from "./components/Vocabulary";
 import Settings from "./components/Settings";
+import LockScreen from "./components/LockScreen";
 import type { LearningData, VocabularyItem } from "./utils/gemini";
 
 
 type Tab = "dashboard" | "study" | "quiz" | "settings";
 
 function App() {
+  // 보안 잠금 상태 관리
+  const [isLocked, setIsLocked] = useState(true);
+  
   // LocalStorage 데이터 읽어오기
   const [apiKey, setApiKey] = useState<string>(() => {
     return localStorage.getItem("my_jptube_apiKey") || "";
@@ -93,6 +97,10 @@ function App() {
 
   // 탭 네비게이션이 보이는 상태인지 여부 (학습 중에는 숨김)
   const showTabBar = activeTab === "dashboard" || activeTab === "settings";
+
+  if (isLocked) {
+    return <LockScreen onUnlock={() => setIsLocked(false)} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-between max-w-[480px] mx-auto relative shadow-2xl border-x border-slate-800/60 pb-16">

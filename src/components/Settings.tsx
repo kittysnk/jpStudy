@@ -9,7 +9,8 @@ import {
   XCircle, 
   AlertTriangle,
   Settings as SettingsIcon,
-  HelpCircle
+  HelpCircle,
+  Lock
 } from "lucide-react";
 import { testGeminiApiKey } from "../utils/gemini";
 import type { LearningData } from "../utils/gemini";
@@ -230,6 +231,33 @@ export default function Settings({
               />
             </label>
           </div>
+        </div>
+      </div>
+      {/* 3. 공부방 보안 잠금 설정 섹션 */}
+      <div className="glass-panel p-5 rounded-3xl space-y-4 shadow-xl">
+        <div className="flex items-center gap-2 text-violet-400 font-semibold text-sm">
+          <Lock size={16} />
+          <span>공부방 보안 잠금 설정 (PIN)</span>
+        </div>
+
+        <div className="space-y-3">
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            웹 주소(Vercel 등)를 통해 비인가 사용자가 공부방에 무단 접속하는 것을 방지합니다. 
+            현재 브라우저에 저장된 4자리 보안 PIN 번호를 완전히 해제하거나 비활성화합니다.
+          </p>
+
+          <button
+            onClick={() => {
+              if (window.confirm("공부방 보안 PIN 비밀번호를 완전히 초기화(제거)하시겠습니까? 다음 접속부터는 PIN 입력이 요구되지 않습니다.")) {
+                localStorage.removeItem("my_jptube_pin");
+                alert("PIN 비밀번호가 제거되었습니다.");
+                window.location.reload();
+              }
+            }}
+            className="w-full bg-red-950/20 hover:bg-red-900/30 text-red-400 border border-red-900/30 rounded-xl py-2.5 text-xs font-bold transition active:scale-95 touch-target"
+          >
+            보안 PIN 비밀번호 초기화 및 제거
+          </button>
         </div>
       </div>
 
