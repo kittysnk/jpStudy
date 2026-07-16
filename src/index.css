@@ -24,9 +24,10 @@ ruby {
 }
 
 rt {
-  font-size: 0.58em;
-  font-weight: 500;
-  color: #a78bfa; /* Violet 400 */
+  /* 색상과 크기를 CSS 커스텀 속성으로부터 상속받아 동적 제어 */
+  font-size: calc(0.72em * var(--font-scale-multiplier, 1));
+  font-weight: 700;
+  color: var(--rt-color, #facc15); /* 디폴트는 형광노란색 (#facc15) */
   user-select: none;
   padding-bottom: 0.1em;
   letter-spacing: 0.05em;
@@ -35,8 +36,13 @@ rt {
 /* 일본어 텍스트는 행간을 충분히 확보 */
 .japanese-text {
   font-family: 'Noto Sans JP', sans-serif;
-  line-height: 2.2 !important;
+  line-height: 2.4 !important;
   letter-spacing: 0.06em;
+}
+
+/* 전역 폰트 크기 스케일 조절 */
+body {
+  font-size: calc(1rem * var(--font-scale-multiplier, 1));
 }
 
 /* 터치 타겟 최소 규격 보장 */

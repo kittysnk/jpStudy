@@ -1,24 +1,64 @@
 /**
- * 유튜브 자막 데이터를 CORS 프록시를 통해 자동으로 긁어오는 유틸리티
+ * 유튜브 자막 데이터를 CORS 프록시를 통해 안전하고 효율적으로 가져오는 유틸리티
  */
 
+// 다중 CORS 프록시 서버 목록 (첫 번째 프록시 실패 시 순차적으로 fallback 수행)
+const CORS_PROXY_LIST = [
+  (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, // JSON 랩핑이 없는 Raw 모드를 최우선으로 시도
+  (url: string) => `https://api.codetabs.com/v1/proxy?queryString=${encodeURIComponent(url)}`,
+  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`
+];
+
 /**
- * AllOrigins 무료 CORS 프록시를 사용해 URL의 텍스트 콘텐츠를 가져옵니다.
+ * 다중 프록시를 순회하며 안전하게 원격 콘텐츠를 가져오는 함수 (AllOrigins /get 은 JSON으로 랩핑되어 오므로 분기 처리)
  */
-async function fetchWithProxy(targetUrl: string): Promise<string> {
-  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-  const response = await fetch(proxyUrl);
-  if (!response.ok) {
-    throw new Error("CORS 프록시 서버 응답에 실패했습니다.");
+async function fetchWithProxyFallback(targetUrl: string): Promise<string> {
+  let lastError: any = null;
+
+  for (const getProxyUrl of CORS_PROXY_LIST) {
+    const proxyUrl = getProxyUrl(targetUrl);
+    try {
+      console.log(`Trying proxy: ${proxyUrl}`);
+      const response = await fetch(proxyUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Proxy status error: ${response.status}`);
+      }
+
+      // AllOrigins JSON 랩핑 포맷 분기 (/get 포함 시)
+      if (proxyUrl.includes("allorigins.win/get")) {
+        const data = await response.json();
+        if (data && data.contents) {
+          return data.contents;
+        }
+        throw new Error("AllOrigins response does not contain contents field");
+      }
+
+      // 타 프록시는 원본 텍스트를 그대로 반환함
+      const text = await response.text();
+      if (text && text.trim()) {
+        return text;
+      }
+    } catch (error: any) {
+      console.warn(`Proxy ${proxyUrl} failed:`, error.message || error);
+      lastError = error;
+    }
   }
-  const data = await response.json();
-  return data.contents;
+
+  throw new Error(`모든 CORS 프록시 요청에 실패했습니다. (최종 에러: ${lastError?.message || "Unknown"})`);
 }
 
 /**
  * 초 단위 숫자를 포맷팅된 타임코드 문자열(예: '01:23')로 변환합니다.
  */
 function formatTimeCode(seconds: number): string {
+  if (isNaN(seconds) || seconds < 0) return "00:00";
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   const pad = (n: number) => n.toString().padStart(2, "0");
@@ -26,27 +66,56 @@ function formatTimeCode(seconds: number): string {
 }
 
 /**
- * 유튜브 timedtext API를 통해 자막 목록을 조회하고, 일본어 자막 트랙을 파싱해 텍스트 형태로 반환합니다.
+ * 메모리 누수와 브라우저 종속성을 제거한 순수 JS 기반 HTML 엔티티 디코더
+ */
+function decodeHtmlEntities(str: string): string {
+  const entityMap: Record<string, string> = {
+    "&amp;": "&",
+    "&lt;": "<",
+    "&gt;": ">",
+    "&quot;": '"',
+    "&#39;": "'",
+    "&apos;": "'",
+    "&nbsp;": " "
+  };
+  return str.replace(/(&amp;|&lt;|&gt;|&quot;|&#39;|&apos;|&nbsp;)/g, (match) => entityMap[match] || match);
+}
+
+/**
+ * 브라우저 환경에서 안전하게 작동하는 XML 파서 유틸
+ */
+function parseXml(xmlText: string): Document | null {
+  try {
+    const parser = new DOMParser();
+    return parser.parseFromString(xmlText, "text/xml");
+  } catch (error) {
+    console.error("DOMParser 파싱 오류:", error);
+    return null;
+  }
+}
+
+/**
+ * 유튜브 timedtext API를 통해 자막 목록을 조회하고, 일본어 자막 트랙(자동 생성 포함)을 파싱해 반환합니다.
  */
 export async function getYoutubeJapaneseSubtitle(videoId: string): Promise<string> {
   try {
-    // 1. 자막 목록 조회
-    // 포맷: xml 형태의 자막 트랙 리스트를 가져옵니다.
     const listUrl = `https://www.youtube.com/api/timedtext?v=${videoId}&type=list`;
     console.log(`Fetching subtitle list for video: ${videoId}`);
-    const listXmlText = await fetchWithProxy(listUrl);
+    const listXmlText = await fetchWithProxyFallback(listUrl);
 
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(listXmlText, "text/xml");
+    const xmlDoc = parseXml(listXmlText);
+    if (!xmlDoc) {
+      throw new Error("자막 목록 XML 파싱에 실패했습니다.");
+    }
+
     const tracks = xmlDoc.getElementsByTagName("track");
-
     if (tracks.length === 0) {
-      console.warn("이 영상에는 공식 자막 데이터 트랙이 존재하지 않습니다.");
+      console.warn("이 영상에는 이용 가능한 자막 트랙 정보가 존재하지 않습니다.");
       return "";
     }
 
-    // 2. 일본어 자막 트랙 찾기 (lang_code가 'ja'인 트랙 우선 탐색, 없으면 자동 생성 자막 'ja' 탐색)
     let selectedLangCode = "";
+    // 일본어 공식 자막(ja)을 최우선적으로 탐색
     for (let i = 0; i < tracks.length; i++) {
       const langCode = tracks[i].getAttribute("lang_code");
       if (langCode === "ja") {
@@ -55,7 +124,7 @@ export async function getYoutubeJapaneseSubtitle(videoId: string): Promise<strin
       }
     }
 
-    // 만약 일본어 자막이 없다면 첫 번째 자막이라도 가져옵니다. (없으면 빈값 반환)
+    // 일본어가 없으면 첫 번째로 존재하는 임의의 자막 트랙 적용
     if (!selectedLangCode && tracks.length > 0) {
       selectedLangCode = tracks[0].getAttribute("lang_code") || "";
     }
@@ -64,33 +133,32 @@ export async function getYoutubeJapaneseSubtitle(videoId: string): Promise<strin
       return "";
     }
 
-    // 3. 자막 상세 데이터 fetch (fmt=srv1 포맷은 간단한 XML로 리턴됩니다.)
+    // srv1 형식(XML 기반 구조)으로 실제 자막 스크립트를 가져옴
     const subUrl = `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${selectedLangCode}&fmt=srv1`;
     console.log(`Fetching subtitle data in lang: ${selectedLangCode}`);
-    const subXmlText = await fetchWithProxy(subUrl);
+    const subXmlText = await fetchWithProxyFallback(subUrl);
 
-    const subDoc = parser.parseFromString(subXmlText, "text/xml");
+    const subDoc = parseXml(subXmlText);
+    if (!subDoc) {
+      throw new Error("자막 상세 XML 파싱에 실패했습니다.");
+    }
+
     const textNodes = subDoc.getElementsByTagName("text");
-
     if (textNodes.length === 0) {
       return "";
     }
 
-    // 4. 자막을 '[01:23] 대사' 포맷으로 병합 파싱
     const parsedLines: string[] = [];
     for (let i = 0; i < textNodes.length; i++) {
       const node = textNodes[i];
       const startStr = node.getAttribute("start");
-      const text = node.textContent || "";
-      
-      if (startStr && text.trim()) {
+      const rawText = node.textContent || "";
+
+      if (startStr && rawText.trim()) {
         const startSec = parseFloat(startStr);
         const timeCode = formatTimeCode(startSec);
-        // HTML Entity 디코딩 처리 (예: &#39; -> ' 등)
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = text;
-        const decodedText = tempDiv.textContent || tempDiv.innerText || text;
-        
+        // 메모리 효율적인 엔티티 디코더를 활용하여 정제
+        const decodedText = decodeHtmlEntities(rawText);
         parsedLines.push(`[${timeCode}] ${decodedText.replace(/\n/g, " ").trim()}`);
       }
     }
@@ -99,6 +167,6 @@ export async function getYoutubeJapaneseSubtitle(videoId: string): Promise<strin
     return parsedLines.join("\n");
   } catch (error) {
     console.error("유튜브 자막을 자동으로 파싱하는 도중 에러가 발생했습니다:", error);
-    return ""; // 에러 발생 시 빈 값을 반환하여 폴백 동작 유도
+    throw error; // 에러를 호출처로 위임하여 팝업 연동 기동
   }
 }

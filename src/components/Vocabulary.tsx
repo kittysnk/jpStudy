@@ -7,10 +7,17 @@ import {
   RotateCcw, 
   Sparkles,
   Trophy,
-  Info
+  Info,
+  Volume2
 } from "lucide-react";
 import type { LearningData, VocabularyItem } from "../utils/gemini";
 import { updateWordWeight, weightedShuffle } from "../utils/weight";
+
+// HTML 루비 태그를 제거하고 순수 일본어 텍스트만 추출하는 헬퍼 함수
+const removeRubyTags = (html: string): string => {
+  if (!html) return "";
+  return html.replace(/<rt>[^<]*<\/rt>/g, "").replace(/<\/?[^>]+(>|$)/g, "");
+};
 
 interface VocabularyProps {
   data: LearningData;
@@ -43,10 +50,11 @@ export default function Vocabulary({ data, onBack, onUpdateQuizProgress }: Vocab
     setVocabList(data.vocabulary_list);
   }, [data.vocabulary_list]);
 
-  // 퀴즈 시작 (가중치 비례 확률 셔플 적용)
+  // 퀴즈 시작 (가중치 비례 확률 셔플 적용 후 상위 10개만 무작위 출제)
   const handleStartQuiz = () => {
     const shuffled = weightedShuffle(vocabList);
-    setQuizList(shuffled);
+    // 전체 단어 중 가중치 우선순위가 높게 적용된 10개만 슬라이스하여 출제
+    setQuizList(shuffled.slice(0, 10));
     setCurrentIdx(0);
     setIsFlipped(false);
     setCorrectCount(0);
@@ -154,25 +162,43 @@ export default function Vocabulary({ data, onBack, onUpdateQuizProgress }: Vocab
                   {/* 단어 및 의미 */}
                   <div className="mt-1">
                     <h4 
-                      className="japanese-text text-lg text-white font-bold leading-normal"
+                      className="japanese-text text-2xl text-white font-bold leading-normal"
                       dangerouslySetInnerHTML={{ __html: item.word }}
                     />
-                    <p className="text-xs text-slate-400 font-medium mt-1">뜻: {item.meaning}</p>
+                    <p className="text-base text-slate-200 font-medium mt-1">뜻: {item.meaning}</p>
                   </div>
 
                   {/* 예문 (드롭다운이나 간이 노출) */}
                   <div className="border-t border-slate-800/60 pt-2 mt-1 space-y-1">
-                    <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                      <Info size={10} />
+                    <p className="text-sm text-slate-400 flex items-center gap-1">
+                      <Info size={14} />
                       <span>예문</span>
                     </p>
                     <p 
-                      className="japanese-text text-xs text-slate-300 leading-relaxed"
+                      className="japanese-text text-[18px] text-slate-300 leading-relaxed"
                       dangerouslySetInnerHTML={{ __html: item.example_sentence }}
                     />
-                    <p className="text-[10px] text-slate-400">
+                    <p className="text-sm text-slate-400">
                       해석: {item.example_meaning}
                     </p>
+                  </div>
+
+                  {/* 유사어 및 반대어 */}
+                  <div className="grid grid-cols-2 gap-4 border-t border-slate-800/60 pt-2.5 mt-1">
+                    <div>
+                      <span className="text-slate-400 text-xs font-semibold block">유사 표현</span>
+                      <span 
+                        className="japanese-text text-white font-bold text-[18px] block mt-0.5"
+                        dangerouslySetInnerHTML={{ __html: item.synonym || "없음" }}
+                      />
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-xs font-semibold block">반대 표현</span>
+                      <span 
+                        className="japanese-text text-white font-bold text-[18px] block mt-0.5"
+                        dangerouslySetInnerHTML={{ __html: item.antonym || "없음" }}
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -214,10 +240,10 @@ export default function Vocabulary({ data, onBack, onUpdateQuizProgress }: Vocab
 
                   <div className="space-y-4">
                     <h3 
-                      className="japanese-text text-3xl text-white font-bold leading-normal select-none"
+                      className="japanese-text text-4xl text-white font-bold leading-normal select-none"
                       dangerouslySetInnerHTML={{ __html: quizList[currentIdx].word }}
                     />
-                    <p className="text-slate-500 text-xs animate-pulse">카드를 터치하면 뒤집힙니다</p>
+                    <p className="text-slate-400 text-sm animate-pulse">카드를 터치하면 뒤집힙니다</p>
                   </div>
 
                   <span className="text-[10px] text-slate-600 font-mono font-medium">
@@ -241,36 +267,69 @@ export default function Vocabulary({ data, onBack, onUpdateQuizProgress }: Vocab
                   {/* 뜻 요약 */}
                   <div className="text-center py-2.5">
                     <p className="text-xs text-slate-500 font-medium">단어 의미</p>
-                    <h4 className="text-xl font-bold text-white mt-1">
+                    <h4 className="text-3xl font-bold text-white mt-1">
                       {quizList[currentIdx].meaning}
                     </h4>
                   </div>
 
-                  {/* 예시 문장 영역 */}
-                  <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-850 space-y-1.5 flex-1 flex flex-col justify-center">
-                    <p className="text-[9px] text-slate-500 font-bold tracking-wider">PRACTICAL EXAMPLE</p>
-                    <p 
-                      className="japanese-text text-slate-200 text-[14px] leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: quizList[currentIdx].example_sentence }}
-                    />
-                    <p className="text-xs text-slate-400 leading-normal">
-                      뜻: {quizList[currentIdx].example_meaning}
-                    </p>
-                  </div>
+                  {/* 예시 문장 영역 및 영상 대사 연동 */}
+                  {(() => {
+                    const currentWord = quizList[currentIdx];
+                    const cleanWord = removeRubyTags(currentWord.word);
+                    // 스크립트 중 순수 텍스트에 이 단어가 포함되는 행을 찾음
+                    const matchedScriptLine = data.script_data.find(s => 
+                      removeRubyTags(s.japanese).includes(cleanWord)
+                    );
+
+                    return (
+                      <div className="bg-slate-900/60 p-4.5 rounded-2xl border border-slate-850 space-y-3.5 flex-1 flex flex-col justify-center overflow-y-auto max-h-[220px]">
+                        {/* 1) AI 추출 예문 */}
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-slate-400 font-bold tracking-wider uppercase">학습 예시 문장</p>
+                          <p 
+                            className="japanese-text text-slate-200 text-[20px] leading-relaxed"
+                            dangerouslySetInnerHTML={{ __html: currentWord.example_sentence }}
+                          />
+                          <p className="text-xs text-slate-400 leading-normal">
+                            뜻: {currentWord.example_meaning}
+                          </p>
+                        </div>
+
+                        {/* 2) 영상 속 실제 대사 (존재할 경우에만 동적 노출) */}
+                        {matchedScriptLine && (
+                          <div className="border-t border-slate-800/80 pt-3 space-y-1">
+                            <p className="text-[10px] text-violet-400 font-bold tracking-wider uppercase flex items-center gap-1">
+                              <Volume2 size={10} />
+                              <span>영상 속 실제 대사 [{matchedScriptLine.time_code}]</span>
+                            </p>
+                            <p 
+                              className="japanese-text text-slate-100 text-[20px] leading-relaxed"
+                              dangerouslySetInnerHTML={{ __html: matchedScriptLine.japanese }}
+                            />
+                            <p className="text-xs text-slate-400 leading-normal">
+                              번역: {matchedScriptLine.korean}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* 유사어 및 반대어 */}
-                  <div className="grid grid-cols-2 gap-3 text-[10px] pt-3 border-t border-slate-850">
+                  <div className="grid grid-cols-2 gap-4.5 pt-3.5 border-t border-slate-800/80">
                     <div>
-                      <span className="text-slate-500 block">유사 표현</span>
-                      <span className="text-slate-300 font-medium truncate block mt-0.5">
-                        {quizList[currentIdx].synonym || "없음"}
-                      </span>
+                      <span className="text-slate-400 text-xs font-semibold block">유사 표현</span>
+                      <span 
+                        className="japanese-text text-white font-bold text-[20px] block mt-1 break-words"
+                        dangerouslySetInnerHTML={{ __html: quizList[currentIdx].synonym || "없음" }}
+                      />
                     </div>
                     <div>
-                      <span className="text-slate-500 block">반대 표현</span>
-                      <span className="text-slate-300 font-medium truncate block mt-0.5">
-                        {quizList[currentIdx].antonym || "없음"}
-                      </span>
+                      <span className="text-slate-400 text-xs font-semibold block">반대 표현</span>
+                      <span 
+                        className="japanese-text text-white font-bold text-[20px] block mt-1 break-words"
+                        dangerouslySetInnerHTML={{ __html: quizList[currentIdx].antonym || "없음" }}
+                      />
                     </div>
                   </div>
                 </div>

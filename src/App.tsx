@@ -16,10 +16,34 @@ type Tab = "dashboard" | "study" | "quiz" | "settings";
 function App() {
   // 보안 잠금 상태 관리
   const [isLocked, setIsLocked] = useState(true);
+
+  // 가독성 테마 및 폰트 크기 설정 상태
+  const [rtColor, setRtColor] = useState<string>(() => {
+    return localStorage.getItem("my_jptube_rt_color") || "#facc15"; // 디폴트는 노란색
+  });
+  const [fontScale, setFontScale] = useState<string>(() => {
+    return localStorage.getItem("my_jptube_font_scale") || "normal";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("my_jptube_rt_color", rtColor);
+  }, [rtColor]);
+
+  useEffect(() => {
+    localStorage.setItem("my_jptube_font_scale", fontScale);
+  }, [fontScale]);
+
+  const handleUpdateThemeSettings = (color: string, scale: string) => {
+    setRtColor(color);
+    setFontScale(scale);
+  };
   
   // LocalStorage 데이터 읽어오기
   const [apiKey, setApiKey] = useState<string>(() => {
     return localStorage.getItem("my_jptube_apiKey") || "";
+  });
+  const [openaiApiKey, setOpenaiApiKey] = useState<string>(() => {
+    return localStorage.getItem("my_jptube_openaiApiKey") || "";
   });
 
   const [items, setItems] = useState<LearningData[]>(() => {
@@ -38,6 +62,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("my_jptube_apiKey", apiKey);
   }, [apiKey]);
+
+  useEffect(() => {
+    localStorage.setItem("my_jptube_openaiApiKey", openaiApiKey);
+  }, [openaiApiKey]);
 
   useEffect(() => {
     localStorage.setItem("my_jptube_items", JSON.stringify(items));
@@ -87,8 +115,11 @@ function App() {
   };
 
   // 복원 데이터 셋
-  const handleImportData = (importedKey: string, importedItems: LearningData[]) => {
+  const handleImportData = (importedKey: string, importedItems: LearningData[], importedOpenaiKey?: string) => {
     setApiKey(importedKey);
+    if (importedOpenaiKey !== undefined) {
+      setOpenaiApiKey(importedOpenaiKey);
+    }
     setItems(importedItems);
     setActiveTab("dashboard");
   };
@@ -103,13 +134,20 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-between max-w-[480px] mx-auto relative shadow-2xl border-x border-slate-800/60 pb-16">
+    <div 
+      className="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-between max-w-[480px] mx-auto relative shadow-2xl border-x border-slate-800/60 pb-16"
+      style={{
+        "--rt-color": rtColor,
+        "--font-scale-multiplier": fontScale === "xlarge" ? "1.3" : fontScale === "large" ? "1.15" : "1.0"
+      } as React.CSSProperties}
+    >
       
       {/* 본문 콘텐츠 뷰 */}
       <main className="flex-1 p-4 overflow-y-auto">
         {activeTab === "dashboard" && (
           <Dashboard
             apiKey={apiKey}
+            openaiApiKey={openaiApiKey}
             items={items}
             onAddVideo={handleAddVideo}
             onDeleteVideo={handleDeleteVideo}
@@ -136,9 +174,14 @@ function App() {
         {activeTab === "settings" && (
           <Settings
             apiKey={apiKey}
+            openaiApiKey={openaiApiKey}
             items={items}
+            rtColor={rtColor}
+            fontScale={fontScale}
             onSaveApiKey={setApiKey}
+            onSaveOpenaiApiKey={setOpenaiApiKey}
             onImportData={handleImportData}
+            onUpdateThemeSettings={handleUpdateThemeSettings}
             onBack={() => setActiveTab("dashboard")}
           />
         )}

@@ -37,6 +37,9 @@ export default function StudyRoom({ data, onBack }: StudyRoomProps) {
 
   // YouTube API Script 로드 및 플레이어 초기화
   useEffect(() => {
+    let active = true;
+    let timerId: number | null = null;
+
     // 이미 로드되었는지 확인
     if (!window.YT) {
       const tag = document.createElement("script");
@@ -47,25 +50,44 @@ export default function StudyRoom({ data, onBack }: StudyRoomProps) {
 
     // API Ready 콜백 설정
     const initPlayer = () => {
-      playerRef.current = new window.YT.Player("youtube-embed-player", {
-        events: {
-          onReady: (event: any) => {
-            console.log("YouTube Player Ready");
-            // 배속 세팅 초기화
-            setPlaybackRate(event.target.getPlaybackRate() || 1);
+      if (!active) return;
+
+      // DOM 마운트가 완전히 끝날 때까지 150ms 딜레이 후 생성 (수동 추가 시 레이스 컨디션 방지)
+      timerId = window.setTimeout(() => {
+        const el = document.getElementById("youtube-embed-player");
+        if (!el || !active) return;
+
+        try {
+          if (playerRef.current && typeof playerRef.current.destroy === "function") {
+            playerRef.current.destroy();
+          }
+        } catch (e) {
+          console.warn("Failed to destroy previous player:", e);
+        }
+
+        playerRef.current = new window.YT.Player("youtube-embed-player", {
+          events: {
+            onReady: (event: any) => {
+              if (active) {
+                console.log("YouTube Player Ready");
+                // 배속 세팅 초기화
+                setPlaybackRate(event.target.getPlaybackRate() || 1);
+              }
+            },
+            onStateChange: (event: any) => {
+              if (!active) return;
+              // YT.PlayerState.PLAYING = 1
+              if (event.data === 1) {
+                setIsPlaying(true);
+                startTrackingProgress();
+              } else {
+                setIsPlaying(false);
+                stopTrackingProgress();
+              }
+            },
           },
-          onStateChange: (event: any) => {
-            // YT.PlayerState.PLAYING = 1
-            if (event.data === 1) {
-              setIsPlaying(true);
-              startTrackingProgress();
-            } else {
-              setIsPlaying(false);
-              stopTrackingProgress();
-            }
-          },
-        },
-      });
+        });
+      }, 150);
     };
 
     if (window.YT && window.YT.Player) {
@@ -75,9 +97,18 @@ export default function StudyRoom({ data, onBack }: StudyRoomProps) {
     }
 
     return () => {
+      active = false;
+      if (timerId !== null) {
+        clearTimeout(timerId);
+      }
       stopTrackingProgress();
       if (playerRef.current && typeof playerRef.current.destroy === "function") {
-        playerRef.current.destroy();
+        try {
+          playerRef.current.destroy();
+        } catch (e) {
+          console.warn("Failed to destroy player on unmount:", e);
+        }
+        playerRef.current = null;
       }
     };
   }, [data.video_id]);
@@ -272,7 +303,7 @@ export default function StudyRoom({ data, onBack }: StudyRoomProps) {
                 }`}
               >
                 {/* 타임코드 */}
-                <div className={`text-xs font-mono shrink-0 pt-1 font-semibold ${
+                <div className={`text-sm font-mono shrink-0 pt-1 font-bold ${
                   isActive ? "text-violet-400 animate-pulse" : "text-slate-500"
                 }`}>
                   [{item.time_code}]
@@ -281,12 +312,12 @@ export default function StudyRoom({ data, onBack }: StudyRoomProps) {
                 {/* 대사 내용 */}
                 <div className="flex-1 space-y-1.5 min-w-0">
                   <p 
-                    className="japanese-text text-slate-100 text-[16px] leading-relaxed break-words"
+                    className="japanese-text text-slate-100 text-[23px] leading-relaxed break-words"
                     dangerouslySetInnerHTML={{ __html: item.japanese }}
                   />
                   {showTranslation && (
-                    <p className={`text-xs leading-relaxed break-words transition-all duration-300 ${
-                      isActive ? "text-violet-200" : "text-slate-400"
+                    <p className={`text-[16px] leading-relaxed break-words transition-all duration-300 ${
+                      isActive ? "text-violet-200 font-medium" : "text-slate-400"
                     }`}>
                       {item.korean}
                     </p>
