@@ -7,16 +7,12 @@ import Dashboard from "./components/Dashboard";
 import StudyRoom from "./components/StudyRoom";
 import Vocabulary from "./components/Vocabulary";
 import Settings from "./components/Settings";
-import LockScreen from "./components/LockScreen";
 import type { LearningData, VocabularyItem } from "./utils/gemini";
 
 
 type Tab = "dashboard" | "study" | "quiz" | "settings";
 
 function App() {
-  // 보안 잠금 상태 관리
-  const [isLocked, setIsLocked] = useState(true);
-
   // 가독성 테마 및 폰트 크기 설정 상태
   const [rtColor, setRtColor] = useState<string>(() => {
     return localStorage.getItem("my_jptube_rt_color") || "#facc15"; // 디폴트는 노란색
@@ -129,9 +125,6 @@ function App() {
   // 탭 네비게이션이 보이는 상태인지 여부 (학습 중에는 숨김)
   const showTabBar = activeTab === "dashboard" || activeTab === "settings";
 
-  if (isLocked) {
-    return <LockScreen onUnlock={() => setIsLocked(false)} />;
-  }
 
   return (
     <div 
