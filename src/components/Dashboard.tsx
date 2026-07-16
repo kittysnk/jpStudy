@@ -56,7 +56,7 @@ export default function Dashboard({
   const [isCopied, setIsCopied] = useState(false);
 
   // 로컬 자막 텍스트 파싱 헬퍼 함수
-  const parseLocalScriptText = (rawText: string, videoId: string) => {
+  const parseLocalScriptText = (rawText: string) => {
     const lines = rawText.split("\n");
     const parsedItems: any[] = [];
     
@@ -248,7 +248,7 @@ export default function Dashboard({
         onAddVideo(finalResult);
       } else {
         // 3. AI 분석을 거치지 않는 로컬 단순 등록 진행
-        const localScriptData = parseLocalScriptText(rawScriptText, videoId);
+        const localScriptData = parseLocalScriptText(rawScriptText);
         
         const today = new Date().toISOString().split("T")[0];
         const finalResult: LearningData = {
