@@ -175,6 +175,19 @@ export default function StudyRoom({ data, onBack }: StudyRoomProps) {
 
   const activeIndex = getActiveScriptIndex();
 
+  // activeIndex 변경 시 스크롤 자동 이동 훅
+  useEffect(() => {
+    if (activeIndex !== -1) {
+      const activeEl = document.getElementById(`script-item-${activeIndex}`);
+      if (activeEl) {
+        activeEl.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      }
+    }
+  }, [activeIndex]);
+
   return (
     <div className="flex flex-col hybrid-landscape-row h-[calc(100vh-1rem)] landscape:h-[calc(100vh-2rem)] w-full overflow-hidden bg-slate-950 rounded-3xl border border-slate-800 shadow-2xl relative">
       
@@ -295,6 +308,7 @@ export default function StudyRoom({ data, onBack }: StudyRoomProps) {
             return (
               <div
                 key={idx}
+                id={`script-item-${idx}`}
                 onClick={() => handleSeek(item.time)}
                 className={`p-3.5 rounded-xl border transition-all duration-300 cursor-pointer flex gap-3 ${
                   isActive
